@@ -1,0 +1,182 @@
+---
+title: "Project 1 - STA 426/526 Winter 2018"
+date: "3/18/2018"
+output:  pdf_document
+Partners: Pratik Chavda & Bibek Thapa
+---
+# Car Body Assembly Project
+In quality control charting, we use a baseline measurement period to establish population parameters for our measurements. These are then used to define control limits which if exceeded indicate sufficient deviation from normal operation to warrant action. This project is applying what we've learned to a multivariate process control situation.
+
+The data file CarBodyAssembly.dat contains data from a study of sheet metal assembly processes for a major automobile manufacturer. They use sensors that record the deviation from nominal thickness (millimeters) at six locations on a car. The first four are measured when the car body is complete and the last two are measured on the underbody at an earlier stage of assembly. The data file contains observations on 50 cars. The first 30 come from a period of stable production operation.  
+
+a) (10 points) Since the measurements are deviations from nominal, do a multivariate test for the mean vector being identically zero. 
+```{r}
+library(tidyverse,quietly = T)
+library(GGally,quietly = T)
+library(mvtnorm,quietly = T)
+library(fBasics)
+library(energy)
+library(mvnormtest)
+library(dplyr)
+install.packages('ICSNP')
+library(ICSNP)
+library(fBasics)
+
+```
+
+
+
+```{r}
+# Observations of 50 cars
+#First 30 come from period of stable production on columns
+
+##First 4 rows are measured when car body is complete
+#Last 2 rows are measured on underbody at earlier stage of assembly
+
+#load the data
+cars= read.table(file = "F:\\STA\\CarBodyAssembly.dat")
+df= data.frame(cars)
+
+df30 <- df[1:30, ]
+df20 <- df[31:50, ]
+
+#1. Multivariate test for mean vector 
+t.test(df$V1)
+t.test(df$V2)
+t.test(df$V3)
+t.test(df$V4)
+t.test(df$V5)
+t.test(df$V6)
+
+HotellingsT2(df)
+
+for (i in c(1,2,3,4,5,6)){
+  print(t.test(df[i]))
+}
+
+```
+
+
+b) (10 points) Test for a difference in the mean vector of the first 30 and the last 20 cars.  
+```{r}
+#2- Test for a difference in the mean vector of the first 30 and the last 20 cars.
+HotellingsT2(df)
+HotellingsT2(df30)
+HotellingsT2(df20)
+
+df30 <- df[1:30, ]
+df20 <- df[31:50, ]
+
+mean_first30=colMeans(df30)
+mean_last20=colMeans(df)
+
+#var30 <- diag(var(df30))
+#mean30 <- colMeans(df30)
+t.test(mean_first30 ~ mean_last20, data = df)
+
+#t.test(mean_first30,mean_last20)
+
+```
+
+c) (15 points) Estimate S and $\bar{x}$ using the first 30 cars and evaluate multivariate normality.  
+```{r}
+
+first_30a=df[1:30,]
+mean_first30a=colMeans(first_30a)
+cov_first30a<-cov(first_30a)
+
+mah<-mahalanobis(first_30a,colMeans(first_30a),var(first_30a))
+n <- dim(first_30a)[1]                # number of rows               
+ncols <- dim(first_30a)[2]            # number of data columns
+
+#Test for Normality
+
+##QQ plot
+qqplot(qchisq((1 : n) / (n + 1), df = ncols), mah, 
+    pch = 16, cex = 3, col = "red", xlim = c(1.25, 15),
+    xlab = "6 df chi-squared quantile", cex.lab = 1.5, 
+    ylab = "Mahalanobis distance from sample mean") 
+abline(0, 1, col = "green", lwd = 4)  # connect quartiles
+
+nbig <- 2                 # How many of the largest to name?  
+bigest <- order(mah)[(n - nbig + 1) : n] # indices of largest
+text(qchisq(((n - nbig + 1) : n) / (n + 1), df = ncols) - .2, 
+   mah[bigest] - c(0, .5), pos = c(2, 1), cex = 1.5, 
+   labels = row.names(first_30a)[bigest])
+
+```
+From QQ plot, we can see it is not normal totally. It has somw
+
+
+```{r}
+shapiro.test(qnorm(pchisq(mah,ncols)))
+
+```
+
+
+d) (15 points) For each of the six locations plot $x_{ij}$ with control limits at $\bar{x}_i \pm 3 \sigma_i$. The $\sigma_i$ values come from the diagonal of your S estimated in c.  
+```{r}
+funct_poscontrollimit<-function(mean,variance)
+{
+  return(mean+3*sqrt(variance))
+}
+funct_negcontrollimit<-function(mean,variance)
+{
+  return(mean-3*sqrt(variance))
+}
+
+first_30a=df[1:30,]
+mean_first30a=colMeans(first_30a)
+cov_first30a<-cov(first_30a)
+diag_first30a<-diag(cov_first30a)
+print(cov_first30a)
+print(diag_first30a)
+
+for(i in 1:length(first_30a))
+    {
+    plot(first_30a[,i],type="n",ylab=paste("V",i),xlab="",ylim=c(-2,2.5))
+    up_limit<-funct_poscontrollimit(mean_first30a[i],diag_first30a[i])
+    low_limit<-funct_negcontrollimit(mean_first30a[i],diag_first30a[i])
+    lines(first_30a[,i], type="o")
+    abline(h=up_limit,col="red")
+    abline(h=low_limit,col="red")
+    abline(h=mean_first30a[i],col="green")
+   
+}
+```
+
+
+e) (15 points) Plot $T^2_j$ with an upper control limit line at $UCL=\chi^2_6(0.05)$ using the pchisq() function.  
+$$T^2_j=(x_j-\bar{x})'S^{-1}(x_j-\bar{x})$$
+```{r}
+
+df_matrix<-data.matrix(df)
+S<-var(df_matrix)
+S_inverse<-solve(S)
+X_mean<-colMeans(df_matrix)
+Uppercontrollimit<-qchisq(0.95,ncols)
+
+number_ofrows <- dim(df)[1] 
+T_empty<-c()
+
+for(i in 1:number_ofrows)
+{
+  difference<-X_mean-df_matrix[i,]
+  T_final<-t(difference)%*%S_inverse%*%difference
+  T_empty<-c(T_empty,T_final)
+}
+
+
+plot(T_empty,type="p",ylab="",xlab="",col=ifelse(T_empty<Uppercontrollimit,"green","red"))
+
+abline(h=Uppercontrollimit,col="red")
+
+
+
+```
+ 
+f) (10 points) Discuss the univariate plots in d with the multivariate plot in e. 
+Ans: We can see the univariate plot was not able to find the points out the control limit whereas the multivariate plots is able to find the points outside of the control limit which univariate plot was not able to find.
+
+g) (25 points) Using the first 30 cars, fit a semi-exchangable variance structure with three covariances, one for the first 4 measurements, another betweeen the first 4 and last 2 and the third between the last two measurements. Then repeat part c and discuss any differences using the new variance structure.
+
